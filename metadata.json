@@ -1,0 +1,7 @@
+{
+  "name": "Enat restaurant",
+  "description": "A complete digital menu and ordering system for an African restaurant in Dubai, featuring role-based dashboards, expense tracking, and analytics.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
