@@ -12,6 +12,7 @@ export const TRANSLATIONS = {
     kitchen: "Kitchen",
     admin: "Admin",
     owner: "Owner",
+    developer: "Developer",
     login: "Login",
     logout: "Logout",
     guest: "Guest",
@@ -57,7 +58,19 @@ export const TRANSLATIONS = {
     addItem: "Add Item",
     remove: "Remove",
     price: "Price",
-    quantity: "Qty"
+    quantity: "Qty",
+    callWaiter: "Call Waiter",
+    waiterCalled: "Waiter Called",
+    serviceRequests: "Service Requests",
+    noServiceRequests: "No active service requests",
+    markResolved: "Mark Resolved",
+    maintenanceMode: "Maintenance Mode",
+    systemSettings: "System Settings",
+    userManagement: "User Management",
+    loginLogs: "Login Logs",
+    appUnderMaintenance: "App Under Maintenance",
+    maintenanceMessage: "We are currently upgrading our system to serve you better. Please try again later.",
+    changeCredentials: "Change Credentials"
   },
   AM: {
     welcome: "እንኳን ደህና መጡ",
@@ -67,6 +80,7 @@ export const TRANSLATIONS = {
     kitchen: "ወጥ ቤት",
     admin: "አስተዳዳሪ",
     owner: "ባለቤት",
+    developer: "ዴቨሎፐር",
     login: "ይግቡ",
     logout: "ውጣ",
     guest: "እንግዳ",
@@ -112,7 +126,19 @@ export const TRANSLATIONS = {
     addItem: "እቃ ጨምር",
     remove: "አስወግድ",
     price: "ዋጋ",
-    quantity: "ብዛት"
+    quantity: "ብዛት",
+    callWaiter: "አስተናጋጅ ጥራ",
+    waiterCalled: "አስተናጋጅ ተጠርቷል",
+    serviceRequests: "የአገልግሎት ጥያቄዎች",
+    noServiceRequests: "ምንም የአገልግሎት ጥያቄ የለም",
+    markResolved: "ተፈትቷል",
+    maintenanceMode: "የጥገና ሁኔታ",
+    systemSettings: "የሲስተም ቅንብሮች",
+    userManagement: "የተጠቃሚ አስተዳደር",
+    loginLogs: "የመግቢያ ምዝግብ ማስታወሻዎች",
+    appUnderMaintenance: "መተግበሪያው በጥገና ላይ ነው።",
+    maintenanceMessage: "የተሻለ አገልግሎት ለመስጠት ሲስተሙን እያሻሻልን ነው። እባክዎ ትንሽ ቆይተው ይሞክሩ።",
+    changeCredentials: "መረጃዎችን ቀይር"
   }
 };
 
@@ -157,7 +183,8 @@ export const INITIAL_MENU: MenuItem[] = [
 ];
 
 export const DEMO_USERS: User[] = [
-  { id: 'u1', username: 'chef', role: UserRole.CHEF, name: 'Chef Musa' },
-  { id: 'u2', username: 'admin', role: UserRole.ADMIN, name: 'Manager Sarah' },
-  { id: 'u3', username: 'owner', role: UserRole.OWNER, name: 'Mr. Kofi' },
+  { id: 'u1', username: 'chef', password: '123', role: UserRole.CHEF, name: 'Chef Musa' },
+  { id: 'u2', username: 'admin', password: '123', role: UserRole.ADMIN, name: 'Manager Sarah' },
+  { id: 'u3', username: 'owner', password: '123', role: UserRole.OWNER, name: 'Mr. Kofi' },
+  { id: 'u4', username: 'dev', password: '123', role: UserRole.DEVELOPER, name: 'Dev Team' },
 ];

@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import { db } from '../services/dataService';
-import { Expense, Order, MenuItem, OrderStatus, CartItem } from '../types';
+import { Expense, Order, MenuItem, OrderStatus, CartItem, WaiterCall } from '../types';
 import { TRANSLATIONS, VAT_RATE, SERVICE_FEE_RATE } from '../constants';
 import { GuestMenu } from './GuestMenu';
-import { FileText, DollarSign, Upload, Printer, Phone, Edit as EditIcon, Save, X, Trash2, Plus, Minus } from 'lucide-react';
+import { FileText, DollarSign, Upload, Printer, Phone, Edit as EditIcon, Save, X, Trash2, Plus, Minus, Bell, CheckCircle } from 'lucide-react';
 
 interface AdminDashboardProps {
   lang: 'EN' | 'AM';
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang }) => {
-  const [activeTab, setActiveTab] = useState<'ORDERS' | 'EXPENSES' | 'MENU' | 'PHONE'>('ORDERS');
+  const [activeTab, setActiveTab] = useState<'ORDERS' | 'EXPENSES' | 'MENU' | 'PHONE' | 'SERVICE'>('ORDERS');
   const [orders, setOrders] = useState<Order[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [waiterCalls, setWaiterCalls] = useState<WaiterCall[]>([]);
   const t = (key: keyof typeof TRANSLATIONS['EN']) => TRANSLATIONS[lang][key] || key;
   
   // Expense Form State
@@ -30,10 +31,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang }) => {
     setOrders(db.getOrders().reverse());
     setExpenses(db.getExpenses().reverse());
     setMenu(db.getMenu());
+    setWaiterCalls(db.getWaiterCalls().filter(c => c.status === 'PENDING').reverse());
   };
 
   useEffect(() => {
     refreshData();
+    const interval = setInterval(refreshData, 5000); // Poll for new data including waiter calls
+    return () => clearInterval(interval);
   }, [activeTab]); 
 
   const handlePrintBill = (order: Order) => {
@@ -41,7 +45,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang }) => {
     
     doc.setFont("helvetica", "bold");
     doc.setFontSize(22);
-    doc.text("SAVANNA EATS", 105, 20, { align: "center" });
+    doc.text("ENAT RESTAURANT", 105, 20, { align: "center" });
     
     doc.setFontSize(12);
     doc.setFont("helvetica", "normal");
@@ -167,11 +171,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang }) => {
     refreshData();
   };
 
+  const resolveCall = (id: string) => {
+    db.resolveWaiterCall(id);
+    refreshData();
+  }
+
   return (
     <div className="bg-stone-800 rounded-xl p-6 min-h-[80vh]">
       <div className="flex space-x-4 mb-8 border-b border-stone-700 pb-4 overflow-x-auto">
         <button onClick={() => setActiveTab('ORDERS')} className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === 'ORDERS' ? 'bg-africa-sunset text-white' : 'text-stone-400 hover:bg-stone-700'}`}>{t('orders')}</button>
         <button onClick={() => setActiveTab('PHONE')} className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'PHONE' ? 'bg-africa-sunset text-white' : 'text-stone-400 hover:bg-stone-700'}`}><Phone size={16}/> {t('phoneOrder')}</button>
+        <button onClick={() => setActiveTab('SERVICE')} className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'SERVICE' ? 'bg-africa-sunset text-white' : 'text-stone-400 hover:bg-stone-700'}`}>
+          <Bell size={16}/> {t('serviceRequests')}
+          {waiterCalls.length > 0 && <span className="bg-red-500 text-white text-xs px-2 rounded-full">{waiterCalls.length}</span>}
+        </button>
         <button onClick={() => setActiveTab('EXPENSES')} className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === 'EXPENSES' ? 'bg-africa-sunset text-white' : 'text-stone-400 hover:bg-stone-700'}`}>{t('expenses')}</button>
         <button onClick={() => setActiveTab('MENU')} className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === 'MENU' ? 'bg-africa-sunset text-white' : 'text-stone-400 hover:bg-stone-700'}`}>{t('manageMenu')}</button>
       </div>
@@ -237,6 +250,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang }) => {
                }} 
              />
           </div>
+        </div>
+      )}
+
+      {/* Service / Waiter Calls View */}
+      {activeTab === 'SERVICE' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+           {waiterCalls.map(call => (
+             <div key={call.id} className="bg-stone-900 border border-red-500/50 p-6 rounded-xl shadow-lg animate-pulse flex flex-col justify-between">
+                <div>
+                   <h3 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
+                     <Bell size={20} className="text-red-500"/> {call.tableName}
+                   </h3>
+                   <p className="text-stone-400 text-sm mb-4">Requesting assistance</p>
+                   <p className="text-xs text-stone-500">{new Date(call.timestamp).toLocaleTimeString()}</p>
+                </div>
+                <button 
+                  onClick={() => resolveCall(call.id)}
+                  className="mt-4 w-full bg-stone-700 hover:bg-green-700 text-white py-2 rounded font-bold flex items-center justify-center gap-2 transition-colors"
+                >
+                  <CheckCircle size={16} /> {t('markResolved')}
+                </button>
+             </div>
+           ))}
+           {waiterCalls.length === 0 && (
+             <div className="col-span-full py-20 text-center text-stone-500 border border-dashed border-stone-700 rounded-xl">
+               <Bell size={48} className="mx-auto mb-4 opacity-20" />
+               <p>{t('noServiceRequests')}</p>
+             </div>
+           )}
         </div>
       )}
 

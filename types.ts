@@ -3,6 +3,7 @@ export enum UserRole {
   CHEF = 'CHEF',
   ADMIN = 'ADMIN',
   OWNER = 'OWNER',
+  DEVELOPER = 'DEVELOPER',
 }
 
 export enum OrderStatus {
@@ -71,6 +72,28 @@ export interface Expense {
 export interface User {
   id: string;
   username: string;
+  password?: string; // Now we store this to allow changes
   role: UserRole;
   name: string;
+}
+
+export interface WaiterCall {
+  id: string;
+  tableId: string;
+  tableName: string;
+  timestamp: number;
+  status: 'PENDING' | 'RESOLVED';
+}
+
+export interface SystemSettings {
+  isMaintenanceMode: boolean;
+  maintenanceMessage: string;
+}
+
+export interface LoginLog {
+  id: string;
+  username: string;
+  role: UserRole;
+  timestamp: number;
+  status: 'SUCCESS' | 'FAILED';
 }

@@ -19,7 +19,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     if (user) {
       onLogin(user);
     } else {
-      setError('Invalid credentials');
+      setError('Invalid credentials. Please check the demo list below.');
     }
   };
 
@@ -38,7 +38,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               value={username}
               onChange={e => setUsername(e.target.value)}
               className="w-full bg-stone-900 border border-stone-600 rounded p-3 text-white focus:border-africa-sunset outline-none"
-              placeholder="e.g. chef, admin, owner"
+              placeholder="e.g. chef"
             />
           </div>
           <div>
@@ -48,10 +48,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               value={password}
               onChange={e => setPassword(e.target.value)}
               className="w-full bg-stone-900 border border-stone-600 rounded p-3 text-white focus:border-africa-sunset outline-none"
-              placeholder="Demo: (any)"
+              placeholder="Enter password"
             />
           </div>
-          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+          {error && <p className="text-red-500 text-sm text-center bg-red-900/20 p-2 rounded border border-red-900/50">{error}</p>}
           <button type="submit" className="w-full bg-africa-sunset text-white py-3 rounded-lg font-bold hover:bg-orange-600 transition-colors">
             Login
           </button>
@@ -60,7 +60,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
            <p className="mb-2 font-bold">Demo Credentials:</p>
            <ul className="list-disc pl-4 space-y-1">
              {DEMO_USERS.map(u => (
-               <li key={u.id}>User: <span className="text-stone-300">{u.username}</span> ({u.role})</li>
+               <li key={u.id}>
+                 User: <span className="text-stone-300 font-mono">{u.username}</span> | 
+                 Pass: <span className="text-africa-gold font-mono">{u.password}</span> ({u.role})
+               </li>
              ))}
            </ul>
         </div>

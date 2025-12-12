@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ShoppingBag, Search, Plus, Minus, Info } from 'lucide-react';
+import { ShoppingBag, Search, Plus, Minus, Info, Bell } from 'lucide-react';
 import { MenuCategory, MenuItem, CartItem, TableLandmark, Order, OrderStatus } from '../types';
 import { LANDMARKS, VAT_RATE, SERVICE_FEE_RATE, TRANSLATIONS } from '../constants';
 import { db } from '../services/dataService';
@@ -20,6 +20,7 @@ export const GuestMenu: React.FC<GuestMenuProps> = ({ initialTableId, onPlaceOrd
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [orderPlaced, setOrderPlaced] = useState<Order | null>(null);
+  const [waiterCalled, setWaiterCalled] = useState(false);
 
   const t = (key: keyof typeof TRANSLATIONS['EN']) => TRANSLATIONS[lang][key] || key;
 
@@ -97,11 +98,24 @@ export const GuestMenu: React.FC<GuestMenuProps> = ({ initialTableId, onPlaceOrd
     onPlaceOrder(newOrder);
   };
 
+  const handleCallWaiter = () => {
+    if (!selectedTable && !isPhoneOrder) return alert('Please select a table first.');
+    db.addWaiterCall({
+      id: Math.random().toString(36).substr(2, 9),
+      tableId: isPhoneOrder ? 'PHONE' : selectedTable!.id,
+      tableName: isPhoneOrder ? t('phoneOrder') : selectedTable!.name,
+      timestamp: Date.now(),
+      status: 'PENDING'
+    });
+    setWaiterCalled(true);
+    setTimeout(() => setWaiterCalled(false), 3000);
+  };
+
   // Views
   if (!selectedTableId && !isPhoneOrder) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[80vh] text-center space-y-8 animate-fade-in">
-        <h1 className="text-4xl font-serif text-africa-gold">Karibu to Savanna Eats</h1>
+        <h1 className="text-4xl font-serif text-africa-gold">Welcome to Enat Restaurant</h1>
         <p className="text-stone-400 max-w-md">{t('selectLandmark')}</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 w-full max-w-4xl px-4">
           {LANDMARKS.map(landmark => (
@@ -168,12 +182,20 @@ export const GuestMenu: React.FC<GuestMenuProps> = ({ initialTableId, onPlaceOrd
                       <h1 className="font-serif font-bold text-xl text-africa-sand">{selectedTable?.name}</h1>
                   </div>
               </div>
-              <button 
-                  onClick={() => setSelectedTableId('')}
-                  className="text-xs text-stone-500 hover:text-white"
-              >
-                  {t('changeTable')}
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleCallWaiter}
+                  className={`flex items-center gap-1 text-xs px-3 py-2 rounded-full border transition-all ${waiterCalled ? 'bg-green-900 border-green-700 text-green-300' : 'border-stone-600 text-stone-400 hover:text-white hover:border-stone-400'}`}
+                >
+                    <Bell size={14} /> {waiterCalled ? t('waiterCalled') : t('callWaiter')}
+                </button>
+                <button 
+                    onClick={() => setSelectedTableId('')}
+                    className="text-xs text-stone-500 hover:text-white underline"
+                >
+                    {t('changeTable')}
+                </button>
+              </div>
           </div>
         </header>
       )}

@@ -141,7 +141,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ lang }) => {
                 </div>
                 <div className="p-6 space-y-4">
                     <div className="text-center mb-4">
-                        <h2 className="text-2xl font-serif text-africa-gold">SAVANNA EATS</h2>
+                        <h2 className="text-2xl font-serif text-africa-gold">ENAT RESTAURANT</h2>
                         <p className="text-stone-500 text-sm">Dubai, UAE</p>
                     </div>
                     <div className="space-y-2 border-b border-stone-800 pb-4">
