@@ -1,220 +1,213 @@
-import { INITIAL_MENU, DEMO_USERS } from "../constants";
-import { Expense, MenuItem, Order, OrderStatus, User, UserRole, WaiterCall, SystemSettings, LoginLog } from "../types";
 
-// Keys for LocalStorage
-const K_MENU = 'savanna_menu';
-const K_ORDERS = 'savanna_orders';
-const K_EXPENSES = 'savanna_expenses';
-const K_USER = 'savanna_user';
-const K_USERS_DB = 'savanna_users_db'; // Stores the list of users
-const K_WAITER_CALLS = 'savanna_waiter_calls';
-const K_SYSTEM_SETTINGS = 'savanna_system_settings';
-const K_LOGIN_LOGS = 'savanna_login_logs';
+import { INITIAL_MENU, DEMO_USERS } from "../constants";
+import { Expense, MenuItem, Order, OrderStatus, User, WaiterCall, SystemSettings, LoginLog, TableInfo } from "../types";
+
+const API_BASE = '/api/store';
 
 class DataService {
+  private currentUser: User | null = null;
+  private initialized: boolean = false;
+  private memoryStore: any = null;
+
   constructor() {
-    this.init();
-  }
-
-  private init() {
-    if (typeof window === 'undefined') return;
-    if (!localStorage.getItem(K_MENU)) {
-      localStorage.setItem(K_MENU, JSON.stringify(INITIAL_MENU));
-    }
-    if (!localStorage.getItem(K_ORDERS)) {
-      localStorage.setItem(K_ORDERS, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(K_EXPENSES)) {
-      localStorage.setItem(K_EXPENSES, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(K_WAITER_CALLS)) {
-      localStorage.setItem(K_WAITER_CALLS, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(K_SYSTEM_SETTINGS)) {
-      localStorage.setItem(K_SYSTEM_SETTINGS, JSON.stringify({ isMaintenanceMode: false, maintenanceMessage: '' }));
-    }
-    if (!localStorage.getItem(K_LOGIN_LOGS)) {
-      localStorage.setItem(K_LOGIN_LOGS, JSON.stringify([]));
-    }
-
-    // Initialize or Fix Users DB
-    // We check if DB exists, AND if it contains the new 'dev' user, AND if users have passwords.
-    // If not, we overwrite with the fresh DEMO_USERS to fix login issues.
-    const storedUsersRaw = localStorage.getItem(K_USERS_DB);
-    let shouldReseed = !storedUsersRaw;
-
-    if (storedUsersRaw) {
-        try {
-            const users = JSON.parse(storedUsersRaw);
-            const hasDev = users.some((u: User) => u.role === UserRole.DEVELOPER);
-            const hasPasswords = users.every((u: User) => !!u.password);
-            if (!hasDev || !hasPasswords) {
-                shouldReseed = true;
-            }
-        } catch (e) {
-            shouldReseed = true;
-        }
-    }
-
-    if (shouldReseed) {
-      localStorage.setItem(K_USERS_DB, JSON.stringify(DEMO_USERS));
+    if (typeof window !== 'undefined') {
+      const s = localStorage.getItem('savanna_session');
+      if (s) this.currentUser = JSON.parse(s);
     }
   }
 
-  // --- Auth & User Management ---
-  
-  getUsers(): User[] {
-    return JSON.parse(localStorage.getItem(K_USERS_DB) || '[]');
-  }
-
-  login(username: string, password: string): User | null {
-    const users = this.getUsers();
+  async ensureInitialized() {
+    if (this.initialized) return;
     
-    // Normalize input
-    const cleanUsername = username.trim().toLowerCase();
-    const cleanPassword = password.trim();
-
-    const user = users.find(u => 
-        u.username.toLowerCase() === cleanUsername && 
-        u.password === cleanPassword
-    );
-    
-    // Log the attempt
-    this.logLoginEvent(username, user ? user.role : UserRole.GUEST, user ? 'SUCCESS' : 'FAILED');
-
-    if (user) {
-      localStorage.setItem(K_USER, JSON.stringify(user));
-      return user;
+    try {
+      // Warm up the store
+      const store = await this.getStore();
+      this.memoryStore = store;
+      
+      // If menu is empty, seed initial data
+      if (!store.menu || store.menu.length === 0) {
+          await this.post('sync', {
+              menu: INITIAL_MENU,
+              users: DEMO_USERS,
+              categories: Array.from(new Set(INITIAL_MENU.map(i => i.category))),
+              settings: {
+                  isMaintenanceMode: false,
+                  maintenanceMessage: 'Updating for you.',
+                  restaurantName: 'Enat Restaurant',
+                  restaurantLocation: 'Dubai, UAE',
+                  totalTables: 17,
+                  theme: 'SAVANNA',
+                  tableSelectionMode: 'WHEEL',
+                  receiptPrinterName: ''
+              }
+          });
+      }
+      this.initialized = true;
+    } catch (e) {
+      console.warn("Backend unavailable, using simulated data.");
+      // Don't throw, just allow fallback logic in component
+      this.initialized = true; 
     }
+  }
+
+  private async fetchWithRetry(url: string, options?: RequestInit) {
+    try {
+      const res = await fetch(url, options);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      console.error(`Fetch failed for ${url}:`, e);
+      throw e;
+    }
+  }
+
+  private async get(type: string) {
+    try {
+      return await this.fetchWithRetry(`${API_BASE}?type=${type}`);
+    } catch (e) {
+      // Fallback: If we have memory store from init, return that slice
+      if (this.memoryStore && this.memoryStore[type]) return this.memoryStore[type];
+      return type === 'settings' ? {} : [];
+    }
+  }
+
+  private async post(type: string, data: any) {
+    try {
+      const res = await this.fetchWithRetry(`${API_BASE}?type=${type}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return res;
+    } catch (e) {
+      console.warn("Could not save to cloud.");
+      return { success: false };
+    }
+  }
+
+  async getStore() {
+      return this.fetchWithRetry(API_BASE);
+  }
+
+  // --- Auth ---
+  async login(username: string, password: string): Promise<User | null> {
+    try {
+      const users: User[] = await this.get('users');
+      const user = users.find(u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password);
+      if (user) {
+        this.currentUser = user;
+        localStorage.setItem('savanna_session', JSON.stringify(user));
+        return user;
+      }
+    } catch (e) {}
     return null;
   }
 
   logout() {
-    localStorage.removeItem(K_USER);
+    this.currentUser = null;
+    localStorage.removeItem('savanna_session');
   }
 
   getCurrentUser(): User | null {
-    const s = localStorage.getItem(K_USER);
-    return s ? JSON.parse(s) : null;
-  }
-
-  updateUserCredentials(userId: string, newUsername: string, newPassword?: string) {
-    const users = this.getUsers();
-    const idx = users.findIndex(u => u.id === userId);
-    if (idx >= 0) {
-      users[idx].username = newUsername;
-      if (newPassword) {
-        users[idx].password = newPassword;
-      }
-      localStorage.setItem(K_USERS_DB, JSON.stringify(users));
-    }
-  }
-
-  // --- System Settings (Maintenance Mode) ---
-
-  getSystemSettings(): SystemSettings {
-    return JSON.parse(localStorage.getItem(K_SYSTEM_SETTINGS) || '{"isMaintenanceMode": false}');
-  }
-
-  toggleMaintenanceMode(status: boolean) {
-    const settings = this.getSystemSettings();
-    settings.isMaintenanceMode = status;
-    localStorage.setItem(K_SYSTEM_SETTINGS, JSON.stringify(settings));
-  }
-
-  // --- Logging ---
-
-  private logLoginEvent(username: string, role: UserRole, status: 'SUCCESS' | 'FAILED') {
-    const logs: LoginLog[] = JSON.parse(localStorage.getItem(K_LOGIN_LOGS) || '[]');
-    const newLog: LoginLog = {
-      id: Math.random().toString(36).substr(2, 9),
-      username,
-      role,
-      timestamp: Date.now(),
-      status
-    };
-    logs.push(newLog);
-    // Keep only last 100 logs
-    if (logs.length > 100) logs.shift();
-    localStorage.setItem(K_LOGIN_LOGS, JSON.stringify(logs));
-  }
-
-  getLoginLogs(): LoginLog[] {
-    return JSON.parse(localStorage.getItem(K_LOGIN_LOGS) || '[]');
+    return this.currentUser;
   }
 
   // --- Menu ---
-  getMenu(): MenuItem[] {
-    return JSON.parse(localStorage.getItem(K_MENU) || '[]');
+  async getMenu(): Promise<MenuItem[]> { return this.get('menu'); }
+  async addMenuItem(item: MenuItem) { await this.post('menu', item); }
+  async updateMenuItem(item: MenuItem) { await this.post('menu', item); }
+  async deleteMenuItem(id: string) {
+    const menu = await this.getMenu();
+    await this.post('sync', { menu: menu.filter(m => m.id !== id) });
   }
 
-  updateMenuItem(item: MenuItem) {
-    const menu = this.getMenu();
-    const idx = menu.findIndex(i => i.id === item.id);
-    if (idx >= 0) {
-      menu[idx] = item;
-      localStorage.setItem(K_MENU, JSON.stringify(menu));
+  async getCategories(): Promise<string[]> { return this.get('categories'); }
+  async addCategory(name: string) {
+    const cats = await this.getCategories();
+    if (!cats.includes(name)) {
+      await this.post('sync', { categories: [...cats, name] });
     }
+  }
+  async removeCategory(name: string) {
+    const cats = await this.getCategories();
+    await this.post('sync', { categories: cats.filter(c => c !== name) });
+  }
+  async renameCategory(oldName: string, newName: string) {
+    const cats = await this.getCategories();
+    const updatedCats = cats.map(c => c === oldName ? newName : c);
+    const menu = await this.getMenu();
+    const updatedMenu = menu.map(item => item.category === oldName ? { ...item, category: newName } : item);
+    await this.post('sync', { categories: updatedCats, menu: updatedMenu });
   }
 
   // --- Orders ---
-  getOrders(): Order[] {
-    return JSON.parse(localStorage.getItem(K_ORDERS) || '[]');
-  }
-
-  placeOrder(order: Order) {
-    const orders = this.getOrders();
-    orders.push(order);
-    localStorage.setItem(K_ORDERS, JSON.stringify(orders));
-  }
-
-  updateOrderStatus(orderId: string, status: OrderStatus) {
-    const orders = this.getOrders();
-    const order = orders.find(o => o.id === orderId);
-    if (order) {
-      order.status = status;
-      localStorage.setItem(K_ORDERS, JSON.stringify(orders));
-    }
-  }
-
-  updateOrder(updatedOrder: Order) {
-    const orders = this.getOrders();
-    const idx = orders.findIndex(o => o.id === updatedOrder.id);
-    if (idx >= 0) {
-      orders[idx] = updatedOrder;
-      localStorage.setItem(K_ORDERS, JSON.stringify(orders));
-    }
+  async getOrders(): Promise<Order[]> { return this.get('orders'); }
+  async placeOrder(order: Order) { await this.post('orders', order); }
+  async updateOrder(order: Order) { await this.post('orders', order); }
+  async updateOrderStatus(orderId: string, status: OrderStatus) {
+      const orders = await this.getOrders();
+      const order = orders.find(o => o.id === orderId);
+      if (order) {
+          order.status = status;
+          await this.updateOrder(order);
+      }
   }
 
   // --- Expenses ---
-  getExpenses(): Expense[] {
-    return JSON.parse(localStorage.getItem(K_EXPENSES) || '[]');
+  async getExpenses(): Promise<Expense[]> { return this.get('expenses'); }
+  async addExpense(expense: Expense) { await this.post('expenses', expense); }
+
+  // --- Settings ---
+  async getSystemSettings(): Promise<SystemSettings> { 
+    const s = await this.get('settings');
+    // Ensure we always return a valid object structure
+    return {
+        isMaintenanceMode: s.isMaintenanceMode ?? false,
+        maintenanceMessage: s.maintenanceMessage ?? '',
+        restaurantName: s.restaurantName ?? 'Enat Restaurant',
+        restaurantLocation: s.restaurantLocation ?? 'Dubai, UAE',
+        restaurantLogo: s.restaurantLogo ?? '',
+        totalTables: s.totalTables ?? 17,
+        theme: s.theme ?? 'SAVANNA',
+        tableSelectionMode: s.tableSelectionMode ?? 'WHEEL',
+        receiptPrinterName: s.receiptPrinterName ?? ''
+    };
+  }
+  async updateSystemSettings(settings: SystemSettings) { await this.post('settings', settings); }
+  async toggleMaintenanceMode(status: boolean) {
+      const settings = await this.getSystemSettings();
+      settings.isMaintenanceMode = status;
+      await this.updateSystemSettings(settings);
   }
 
-  addExpense(expense: Expense) {
-    const expenses = this.getExpenses();
-    expenses.push(expense);
-    localStorage.setItem(K_EXPENSES, JSON.stringify(expenses));
+  async getTables(): Promise<TableInfo[]> {
+      const settings = await this.getSystemSettings();
+      const count = settings.totalTables || 17;
+      return Array.from({ length: count }, (_, i) => ({
+        id: String(i + 1),
+        name: `Table ${i + 1}`
+      }));
   }
 
   // --- Waiter Calls ---
-  getWaiterCalls(): WaiterCall[] {
-    return JSON.parse(localStorage.getItem(K_WAITER_CALLS) || '[]');
-  }
+  async getWaiterCalls(): Promise<WaiterCall[]> { return this.get('waiterCalls'); }
+  async addWaiterCall(call: WaiterCall) { await this.post('waiterCalls', call); }
+  async resolveWaiterCall(id: string) { await this.post('waiterCalls', { resolveId: id }); }
 
-  addWaiterCall(call: WaiterCall) {
-    const calls = this.getWaiterCalls();
-    calls.push(call);
-    localStorage.setItem(K_WAITER_CALLS, JSON.stringify(calls));
+  async getLoginLogs(): Promise<LoginLog[]> { return this.get('logs'); }
+  async getUsers(): Promise<User[]> { return this.get('users'); }
+  async addUser(user: User) {
+    const users = await this.getUsers();
+    await this.post('sync', { users: [...users, user] });
   }
-
-  resolveWaiterCall(id: string) {
-    const calls = this.getWaiterCalls();
-    const call = calls.find(c => c.id === id);
-    if (call) {
-      call.status = 'RESOLVED';
-      localStorage.setItem(K_WAITER_CALLS, JSON.stringify(calls));
-    }
+  async updateUser(user: User) {
+    const users = await this.getUsers();
+    const updatedUsers = users.map(u => u.id === user.id ? { ...u, ...user, password: user.password || u.password } : u);
+    await this.post('sync', { users: updatedUsers });
+  }
+  async removeUser(id: string) {
+    const users = await this.getUsers();
+    await this.post('sync', { users: users.filter(u => u.id !== id) });
   }
 }
 

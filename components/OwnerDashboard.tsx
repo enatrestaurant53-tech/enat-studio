@@ -1,3 +1,4 @@
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { db } from '../services/dataService';
 import { Order, Expense } from '../types';
@@ -6,12 +7,14 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { Eye, FileText, X } from 'lucide-react';
 
 interface OwnerDashboardProps {
-  lang: 'EN' | 'AM';
+  lang: 'EN' | 'AM' | 'TI' | 'ES' | 'FR';
 }
 
 export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ lang }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [restaurantName, setRestaurantName] = useState('Enat Restaurant');
+  const [restaurantLocation, setRestaurantLocation] = useState('Dubai, UAE');
   
   // Modals
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
@@ -20,12 +23,27 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ lang }) => {
   const t = (key: keyof typeof TRANSLATIONS['EN']) => TRANSLATIONS[lang][key] || key;
 
   useEffect(() => {
-    setOrders(db.getOrders());
-    setExpenses(db.getExpenses());
+    // Fix: db methods return Promises, must be awaited
+    const loadData = async () => {
+      const fetchedOrdersRaw = await db.getOrders();
+      const fetchedOrders = fetchedOrdersRaw.map(o => ({
+          ...o,
+          paymentStatus: o.paymentStatus || 'UNPAID' // Fallback for legacy
+      }));
+      setOrders(fetchedOrders);
+      setExpenses(await db.getExpenses());
+      
+      const settings = await db.getSystemSettings();
+      setRestaurantName(settings.restaurantName);
+      setRestaurantLocation(settings.restaurantLocation);
+    };
+    loadData();
   }, []);
 
   const stats = useMemo(() => {
-    const totalSales = orders.reduce((acc, o) => acc + o.total, 0);
+    // Only count PAID orders for revenue
+    const paidOrders = orders.filter(o => o.paymentStatus === 'PAID');
+    const totalSales = paidOrders.reduce((acc, o) => acc + o.total, 0);
     const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
     const profit = totalSales - totalExpenses;
     return { totalSales, totalExpenses, profit };
@@ -79,9 +97,9 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ lang }) => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Recent Sales List */}
         <div className="bg-stone-800 p-6 rounded-xl">
-          <h3 className="text-lg font-bold text-white mb-4">Recent Sales (Receipts)</h3>
+          <h3 className="text-lg font-bold text-white mb-4">Recent Sales (Paid Receipts)</h3>
           <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-            {orders.slice().reverse().map(o => (
+            {orders.slice().reverse().filter(o => o.paymentStatus === 'PAID').map(o => (
               <button 
                 key={o.id} 
                 onClick={() => setViewOrder(o)}
@@ -97,6 +115,9 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ lang }) => {
                  </div>
               </button>
             ))}
+            {orders.filter(o => o.paymentStatus === 'PAID').length === 0 && (
+                <p className="text-stone-500 text-sm">No paid orders recorded yet.</p>
+            )}
           </div>
         </div>
 
@@ -127,6 +148,9 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ lang }) => {
                  </div>
               </button>
             ))}
+            {expenses.length === 0 && (
+                <p className="text-stone-500 text-sm">No expenses recorded yet.</p>
+            )}
           </div>
         </div>
       </div>
@@ -141,8 +165,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ lang }) => {
                 </div>
                 <div className="p-6 space-y-4">
                     <div className="text-center mb-4">
-                        <h2 className="text-2xl font-serif text-africa-gold">ENAT RESTAURANT</h2>
-                        <p className="text-stone-500 text-sm">Dubai, UAE</p>
+                        <h2 className="text-2xl font-serif text-africa-gold">{restaurantName.toUpperCase()}</h2>
+                        <p className="text-stone-500 text-sm">{restaurantLocation}</p>
                     </div>
                     <div className="space-y-2 border-b border-stone-800 pb-4">
                         {viewOrder.items.map((item, i) => (

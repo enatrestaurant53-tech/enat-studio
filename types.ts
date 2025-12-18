@@ -1,3 +1,4 @@
+
 export enum UserRole {
   GUEST = 'GUEST',
   CHEF = 'CHEF',
@@ -27,10 +28,10 @@ export interface MenuItem {
   name: string;
   description: string;
   price: number;
-  category: MenuCategory;
+  category: string; // Changed from MenuCategory to string to allow dynamic categories
   imageUrl: string;
   isAvailable: boolean;
-  tags: ('spicy' | 'vegan' | 'halal' | 'gf')[];
+  tags: string[]; // Simplified to string array for flexibility
   allergens?: string[];
 }
 
@@ -41,7 +42,7 @@ export interface CartItem extends MenuItem {
 
 export interface Order {
   id: string;
-  tableId: string; // The landmark ID
+  tableId: string;
   tableName: string;
   items: CartItem[];
   subtotal: number;
@@ -49,15 +50,17 @@ export interface Order {
   serviceFee: number;
   total: number;
   status: OrderStatus;
+  paymentStatus: 'PAID' | 'UNPAID';
   timestamp: number;
+  readyTimestamp?: number;
+  completedTimestamp?: number;
   paymentMethod: 'ONLINE' | 'CASH';
 }
 
-export interface TableLandmark {
+export interface TableInfo {
   id: string;
   name: string;
-  description: string;
-  imagePlaceholder: string;
+  description?: string; 
 }
 
 export interface Expense {
@@ -72,7 +75,7 @@ export interface Expense {
 export interface User {
   id: string;
   username: string;
-  password?: string; // Now we store this to allow changes
+  password?: string;
   role: UserRole;
   name: string;
 }
@@ -85,9 +88,19 @@ export interface WaiterCall {
   status: 'PENDING' | 'RESOLVED';
 }
 
+export type AppTheme = 'SAVANNA' | 'MIDNIGHT' | 'GARDEN';
+export type TableMode = 'WHEEL' | 'GRID' | 'LIST';
+
 export interface SystemSettings {
   isMaintenanceMode: boolean;
   maintenanceMessage: string;
+  restaurantName: string;
+  restaurantLocation: string; 
+  restaurantLogo: string; // URL
+  totalTables: number;
+  theme: AppTheme;
+  tableSelectionMode: TableMode;
+  receiptPrinterName: string; // Name of the printer in QZ Tray/OS
 }
 
 export interface LoginLog {

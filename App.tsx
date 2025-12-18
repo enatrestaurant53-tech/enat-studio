@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { GuestMenu } from './components/GuestMenu';
@@ -7,44 +8,102 @@ import { OwnerDashboard } from './components/OwnerDashboard';
 import { DeveloperDashboard } from './components/DeveloperDashboard';
 import { Login } from './components/Login';
 import { db } from './services/dataService';
-import { User, UserRole } from './types';
-import { Utensils, LogOut, Globe, ShieldAlert, Lock } from 'lucide-react';
+import { User, UserRole, SystemSettings } from './types';
+import { Utensils, LogOut, ShieldAlert, Lock, Loader2 } from 'lucide-react';
 import { TRANSLATIONS } from './constants';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [view, setView] = useState<'GUEST' | 'STAFF'>('GUEST');
   const [urlTableId, setUrlTableId] = useState<string>('');
-  const [lang, setLang] = useState<'EN' | 'AM'>('EN');
+  const [lang, setLang] = useState<'EN' | 'AM' | 'TI' | 'ES' | 'FR'>('EN');
+  const [isLoading, setIsLoading] = useState(true);
   
-  // Maintenance State
-  const [isMaintenance, setIsMaintenance] = useState(false);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
 
   useEffect(() => {
-    // Check for user session
-    const user = db.getCurrentUser();
-    if (user) setCurrentUser(user);
+    const initApp = async () => {
+        try {
+            // Initialize the database (seeds if necessary)
+            await db.ensureInitialized();
+            
+            const user = db.getCurrentUser();
+            if (user) setCurrentUser(user);
 
-    // Check Maintenance Status
-    const settings = db.getSystemSettings();
-    setIsMaintenance(settings.isMaintenanceMode);
+            const initialSettings = await db.getSystemSettings();
+            setSettings(initialSettings);
+            document.title = `${initialSettings.restaurantName} | ${initialSettings.restaurantLocation}`;
 
-    // Check URL params for QR code ?table=kilimanjaro
-    const params = new URLSearchParams(window.location.search);
-    const table = params.get('table');
-    if (table) setUrlTableId(table);
+            const params = new URLSearchParams(window.location.search);
+            const table = params.get('table');
+            if (table) setUrlTableId(table);
+        } catch (error) {
+            console.error("Initialization error:", error);
+            // Fallback to local defaults if API is completely unavailable
+            const fallbackSettings: SystemSettings = {
+                isMaintenanceMode: false,
+                maintenanceMessage: '',
+                restaurantName: 'Enat Restaurant',
+                restaurantLocation: 'Dubai, UAE',
+                restaurantLogo: '',
+                totalTables: 17,
+                theme: 'SAVANNA',
+                tableSelectionMode: 'WHEEL',
+                receiptPrinterName: ''
+            };
+            setSettings(fallbackSettings);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    initApp();
   }, []);
 
-  // Poll for maintenance status changes (e.g. if developer toggles it in another tab)
+  // Theme effect
   useEffect(() => {
-    const interval = setInterval(() => {
-        const settings = db.getSystemSettings();
-        if (settings.isMaintenanceMode !== isMaintenance) {
-            setIsMaintenance(settings.isMaintenanceMode);
+    if (!settings) return;
+    const root = document.documentElement;
+    if (settings.theme === 'MIDNIGHT') {
+        root.style.setProperty('--color-dark', '#0f172a');
+        root.style.setProperty('--color-earth', '#334155');
+        root.style.setProperty('--color-clay', '#475569');
+        root.style.setProperty('--color-sand', '#f8fafc');
+        root.style.setProperty('--color-sunset', '#7c3aed');
+        root.style.setProperty('--color-gold', '#f59e0b');
+        root.style.setProperty('--color-leaf', '#10b981');
+    } else if (settings.theme === 'GARDEN') {
+        root.style.setProperty('--color-dark', '#052e16');
+        root.style.setProperty('--color-earth', '#14532d');
+        root.style.setProperty('--color-clay', '#166534');
+        root.style.setProperty('--color-sand', '#ecfccb');
+        root.style.setProperty('--color-sunset', '#15803d');
+        root.style.setProperty('--color-gold', '#a3e635');
+        root.style.setProperty('--color-leaf', '#4ade80');
+    } else {
+        root.style.setProperty('--color-dark', '#1c1917');
+        root.style.setProperty('--color-earth', '#78350f');
+        root.style.setProperty('--color-clay', '#92400e');
+        root.style.setProperty('--color-sand', '#f5f5f4');
+        root.style.setProperty('--color-sunset', '#ea580c');
+        root.style.setProperty('--color-gold', '#d97706');
+        root.style.setProperty('--color-leaf', '#15803d');
+    }
+  }, [settings?.theme]);
+
+  // Poll for settings
+  useEffect(() => {
+    const interval = setInterval(async () => {
+        try {
+            const newSettings = await db.getSystemSettings();
+            if (JSON.stringify(newSettings) !== JSON.stringify(settings)) {
+                setSettings(newSettings);
+            }
+        } catch (e) {
+            // Ignore polling errors to prevent UI disruption
         }
-    }, 2000);
+    }, 5000);
     return () => clearInterval(interval);
-  }, [isMaintenance]);
+  }, [settings]);
 
   const handleLogout = () => {
     db.logout();
@@ -52,104 +111,71 @@ const App: React.FC = () => {
     setView('GUEST');
   };
 
-  const toggleLang = () => {
-    setLang(prev => prev === 'EN' ? 'AM' : 'EN');
-  };
+  const t = (key: keyof typeof TRANSLATIONS['EN']) => TRANSLATIONS[lang][key] || key;
 
-  const t = (key: keyof typeof TRANSLATIONS['EN']) => {
-    return TRANSLATIONS[lang][key] || key;
-  };
+  if (isLoading || !settings) {
+    return (
+        <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center space-y-4">
+            <Loader2 className="animate-spin text-africa-sunset" size={48} />
+            <p className="text-africa-sand font-serif text-xl animate-pulse">Loading Enat...</p>
+        </div>
+    );
+  }
 
-  const renderStaffView = () => {
-    if (!currentUser) return <Login onLogin={setCurrentUser} />;
-    
-    // If under maintenance, only Developer can see dashboards. Others see maintenance screen.
-    if (isMaintenance && currentUser.role !== UserRole.DEVELOPER) {
-         return (
-             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
-                 <ShieldAlert size={64} className="text-africa-sunset" />
-                 <h2 className="text-3xl font-serif text-white">{t('appUnderMaintenance')}</h2>
-                 <p className="text-stone-400 max-w-md">{t('maintenanceMessage')}</p>
-                 <button onClick={handleLogout} className="text-sm text-stone-500 underline hover:text-white">{t('logout')}</button>
-             </div>
-         );
-    }
-
-    switch (currentUser.role) {
-      case UserRole.CHEF:
-        return <ChefDashboard lang={lang} />;
-      case UserRole.ADMIN:
-        return <AdminDashboard lang={lang} />;
-      case UserRole.OWNER:
-        return <OwnerDashboard lang={lang} />;
-      case UserRole.DEVELOPER:
-        return <DeveloperDashboard lang={lang} />;
-      default:
-        return <div>Access Denied</div>;
-    }
-  };
-
-  // Maintenance View for Guests
-  if (isMaintenance && !currentUser && view === 'GUEST') {
+  if (settings.isMaintenanceMode && !currentUser && view === 'GUEST') {
       return (
           <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col items-center justify-center p-4">
               <ShieldAlert size={80} className="text-africa-sunset mb-6 animate-pulse" />
               <h1 className="text-4xl font-serif font-bold text-white mb-4 text-center">{t('appUnderMaintenance')}</h1>
-              <p className="text-stone-400 text-center max-w-lg text-lg leading-relaxed mb-10">
-                  {t('maintenanceMessage')}
-              </p>
-              {/* Backdoor for staff to log in during maintenance */}
-              <button onClick={() => setView('STAFF')} className="text-stone-600 hover:text-africa-gold flex items-center gap-2 text-sm transition-colors">
-                  <Lock size={14}/> Staff Access
-              </button>
+              <p className="text-stone-400 text-center max-w-lg text-lg mb-10">{settings.maintenanceMessage || t('maintenanceMessage')}</p>
+              <div className="flex flex-col items-center gap-4">
+                <button onClick={() => setView('STAFF')} className="text-stone-600 hover:text-africa-gold flex items-center gap-2 text-sm transition-colors">
+                    <Lock size={14}/> Staff Access
+                </button>
+                <button onClick={() => window.location.reload()} className="px-6 py-2 bg-stone-800 rounded-lg text-xs font-bold text-stone-400 hover:bg-stone-700 transition-colors">
+                    Retry Connection
+                </button>
+              </div>
           </div>
       );
   }
 
   return (
     <Layout>
-      {/* Navigation Bar */}
-      <nav className="flex items-center justify-between mb-8 pb-4 border-b border-stone-800">
+      <nav className="flex items-center justify-between mb-8 pb-4 border-b border-white/10">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('GUEST')}>
             <div className="bg-africa-sunset p-2 rounded-lg">
                 <Utensils className="text-white" size={24} />
             </div>
             <div>
-                <h1 className="text-xl font-serif font-bold text-white leading-none">ENAT</h1>
-                <span className="text-xs text-africa-gold tracking-[0.2em] uppercase">Restaurant Dubai</span>
+                <h1 className="text-xl font-serif font-bold text-white uppercase">{settings.restaurantName}</h1>
+                <span className="text-xs text-africa-gold tracking-widest uppercase">{settings.restaurantLocation}</span>
             </div>
         </div>
         
         <div className="flex gap-4 items-center">
-            <button 
-              onClick={toggleLang}
-              className="flex items-center gap-1 text-xs font-bold px-3 py-1 rounded border border-stone-700 hover:border-africa-gold text-stone-400 hover:text-white transition-colors"
-            >
-              <Globe size={14} />
-              {lang === 'EN' ? 'አማ' : 'EN'}
+            <button onClick={() => setLang(l => l === 'EN' ? 'AM' : 'EN')} className="text-xs font-bold text-stone-400">
+                {lang === 'EN' ? 'አማ' : 'EN'}
             </button>
-
             {currentUser ? (
-               <div className="flex items-center gap-4">
-                  <span className="text-sm hidden sm:block text-stone-400">{t('welcome')}, <span className="text-white font-bold">{currentUser.name}</span></span>
-                  <button onClick={handleLogout} className="text-stone-500 hover:text-red-400" title={t('logout')}><LogOut size={20}/></button>
-               </div>
+               <button onClick={handleLogout} className="text-stone-500 hover:text-red-400"><LogOut size={20}/></button>
             ) : (
-                <button 
-                  onClick={() => setView(view === 'GUEST' ? 'STAFF' : 'GUEST')}
-                  className="text-xs font-bold text-stone-500 hover:text-africa-gold uppercase tracking-widest"
-                >
+                <button onClick={() => setView(v => v === 'GUEST' ? 'STAFF' : 'GUEST')} className="text-xs font-bold text-stone-500 uppercase">
                     {view === 'GUEST' ? t('login') : t('guest')}
                 </button>
             )}
         </div>
       </nav>
 
-      {/* Main Content Area */}
       {view === 'GUEST' ? (
-        <GuestMenu initialTableId={urlTableId} onPlaceOrder={(o) => console.log('Order Placed', o)} lang={lang} />
+        <GuestMenu initialTableId={urlTableId} onPlaceOrder={() => {}} lang={lang} />
       ) : (
-        renderStaffView()
+        !currentUser ? <Login onLogin={setCurrentUser} /> : (
+            currentUser.role === UserRole.CHEF ? <ChefDashboard lang={lang} /> :
+            currentUser.role === UserRole.ADMIN ? <AdminDashboard lang={lang} /> :
+            currentUser.role === UserRole.OWNER ? <OwnerDashboard lang={lang} /> :
+            <DeveloperDashboard lang={lang} />
+        )
       )}
     </Layout>
   );

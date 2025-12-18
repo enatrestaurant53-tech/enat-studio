@@ -1,7 +1,7 @@
+
 import React, { useState } from 'react';
 import { db } from '../services/dataService';
 import { User } from '../types';
-import { DEMO_USERS } from '../constants';
 import { Lock } from 'lucide-react';
 
 interface LoginProps {
@@ -13,13 +13,14 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = db.login(username, password);
+    // Fix: db.login is async
+    const user = await db.login(username, password);
     if (user) {
       onLogin(user);
     } else {
-      setError('Invalid credentials. Please check the demo list below.');
+      setError('Invalid credentials.');
     }
   };
 
@@ -38,7 +39,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               value={username}
               onChange={e => setUsername(e.target.value)}
               className="w-full bg-stone-900 border border-stone-600 rounded p-3 text-white focus:border-africa-sunset outline-none"
-              placeholder="e.g. chef"
+              placeholder="Enter username"
             />
           </div>
           <div>
@@ -56,17 +57,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             Login
           </button>
         </form>
-        <div className="mt-6 pt-6 border-t border-stone-700 text-xs text-stone-500">
-           <p className="mb-2 font-bold">Demo Credentials:</p>
-           <ul className="list-disc pl-4 space-y-1">
-             {DEMO_USERS.map(u => (
-               <li key={u.id}>
-                 User: <span className="text-stone-300 font-mono">{u.username}</span> | 
-                 Pass: <span className="text-africa-gold font-mono">{u.password}</span> ({u.role})
-               </li>
-             ))}
-           </ul>
-        </div>
       </div>
     </div>
   );
