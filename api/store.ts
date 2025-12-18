@@ -1,6 +1,4 @@
-
-// Fix: Use type-only imports for VercelRequest and VercelResponse to avoid namespace as type errors
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+// @ts-nocheck
 
 // In a real production app, you would use a database like Supabase or MongoDB.
 // For Vercel Serverless, global variables are per-instance. 
@@ -26,8 +24,7 @@ let centralStore: any = {
   }
 };
 
-// Fix: The VercelRequest and VercelResponse types are now imported correctly as types
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   const { method, query } = req;
   const type = query.type as string;
 

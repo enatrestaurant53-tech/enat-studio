@@ -1,4 +1,3 @@
-
 import { INITIAL_MENU, DEMO_USERS } from "../constants";
 import { Expense, MenuItem, Order, OrderStatus, User, WaiterCall, SystemSettings, LoginLog, TableInfo } from "../types";
 
