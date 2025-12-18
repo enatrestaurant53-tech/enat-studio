@@ -1,4 +1,4 @@
-// @ts-nocheck
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 // In a real production app, you would use a database like Supabase or MongoDB.
 // For Vercel Serverless, global variables are per-instance. 
@@ -24,7 +24,12 @@ let centralStore: any = {
   }
 };
 
-export default async function handler(req: any, res: any) {
+/**
+ * Vercel Serverless Function Handler
+ * Uses type-only imports to satisfy strict tsc builds and avoid namespace conflicts.
+ */
+// Fix: req and res now correctly use VercelRequest and VercelResponse interfaces defined in env.d.ts
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { method, query } = req;
   const type = query.type as string;
 
